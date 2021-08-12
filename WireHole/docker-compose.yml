@@ -1,0 +1,65 @@
+version: "3"
+
+networks:
+  private_network:
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.2.0.0/24
+
+services:
+  wireguard:
+    depends_on: [pihole]
+    image: linuxserver/wireguard
+    container_name: wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Rome # Change to your timezone
+      - SERVERPORT=51820
+      - SERVERURL=your_ddns_address.ddns.net #optional - For use with DDNS (Uncomment to use)
+      - PEERS=1 # How many peers to generate for you (clients)
+      - PEERDNS=10.2.0.100 # Set it to point to pihole
+      - INTERNAL_SUBNET=10.6.0.0
+      
+    volumes:
+      - ./wireguard:/config
+      - /lib/modules:/lib/modules
+    ports:
+      - "51820:51820/udp"
+    dns:
+      - 10.2.0.100 # Points to pihole
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+
+    restart: unless-stopped
+    networks:
+      private_network:
+        ipv4_address: 10.2.0.3
+
+  pihole:
+    container_name: pihole_wireguard
+    image: pihole/pihole:latest
+    restart: unless-stopped
+    hostname: pihole
+    dns:
+      - 127.0.0.1
+    environment:
+      TZ: "Europe/Rome"
+      # WEBPASSWORD: 'set a secure password here or it will be random'
+      ServerIP: 10.1.0.100 # Internal IP of pihole
+      PIHOLE_DNS_: 208.67.222.222;208.67.220.220
+    # Volumes store your data between container upgrades
+    volumes:
+      - "./etc-pihole/:/etc/pihole/"
+      - "./etc-dnsmasq.d/:/etc/dnsmasq.d/"
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    cap_add:
+      - NET_ADMIN
+    networks:
+      private_network:
+        ipv4_address: 10.2.0.100
